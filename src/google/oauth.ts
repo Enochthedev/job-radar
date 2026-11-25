@@ -55,7 +55,7 @@ export async function completeOAuth(code: string, label?: string): Promise<Accou
     .onConflictDoUpdate({ target: [accounts.provider, accounts.email], set: { ...values, label: label ?? undefined } })
     .returning();
   accessCache.delete(row.id);
-  await logEvent("wave", "account.connected", { email, scopes: values.scopes });
+  await logEvent("owner", "account.connected", { email, scopes: values.scopes });
   return row;
 }
 

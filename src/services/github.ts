@@ -1,9 +1,12 @@
 import { config } from "../config.js";
+import { loadProfile } from "../profile.js";
 
 /** Pinned repos (+ top starred) so Claude can pick the right proof project for each note. */
 export async function listProjects(o: { readme_for?: string } = {}) {
   const token = config().GITHUB_TOKEN;
-  const login = "Enochthedev";
+  // Token is optional: public repos work without one; pinned repos need GraphQL, which needs a token.
+  const login = config().GITHUB_USERNAME ?? loadProfile().candidate.github;
+  if (!login) throw new Error("set candidate.github in profile.yaml (or GITHUB_USERNAME)");
   const headers: Record<string, string> = { "user-agent": "job-radar", accept: "application/vnd.github+json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
   if (o.readme_for) {
     const res = await fetch(`https://api.github.com/repos/${login}/${encodeURIComponent(o.readme_for)}/readme`, { headers: { ...headers, accept: "application/vnd.github.raw" } });

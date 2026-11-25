@@ -30,7 +30,7 @@ export function scoreJob(j: Scorable, p: Profile, now = new Date()): { score: nu
   const stackPts = Math.round((Math.min(hit.length, 4) / 4) * s.stack.weight);
   if (stackPts) reasons.stack = stackPts;
 
-  // Domain overlap with Wave's proof.
+  // Domain overlap with the candidate's proof (profile.yaml score.domain).
   const domains = [...new Set(s.domain.terms.filter((t) => termRx(t).test(text)).map((t) => t.toLowerCase()))];
   const domainPts = Math.min(s.domain.weight, domains.length * 7);
   if (domainPts) { reasons.domain = domainPts; reasons.domain_terms = domains.slice(0, 4).join(", "); }

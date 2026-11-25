@@ -97,7 +97,7 @@ export async function parseJobUrl(url: string): Promise<RawJob> {
   return { source: "manual", externalId: url, url, title, company: decodeEntities(site ?? u.hostname.replace(/^www\.|^jobs\.|^careers\./, "")), companyDomain: companyDomainFrom(url), description: body, ...parseSalaryText(body.match(/[$€£]\s?\d[\d,.]*k?\s?[-–]\s?[$€£]?\s?\d[\d,.]*k?/i)?.[0]) };
 }
 
-export async function addJob(url: string, actor: "claude" | "wave" = "claude") {
+export async function addJob(url: string, actor: "claude" | "owner" = "claude") {
   const raw = await parseJobUrl(url);
   raw.source = "manual"; raw.externalId = url;
   const counts = await ingest([raw], "manual");
@@ -141,10 +141,10 @@ export async function shortlist(limit?: number) {
   return out;
 }
 
-export async function updateStatus(applicationId: number, status: AppStatus, note: string | undefined, actor: "claude" | "wave" | "system") {
+export async function updateStatus(applicationId: number, status: AppStatus, note: string | undefined, actor: "claude" | "owner" | "system") {
   const [app] = await db().select().from(applications).where(eq(applications.id, applicationId));
   if (!app) throw new Error(`application ${applicationId} not found`);
-  if (status === "approved" && actor !== "wave") throw new Error("only Wave can approve; set Decision=Apply in the sheet or approve on the dashboard");
+  if (status === "approved" && actor !== "owner") throw new Error("only the owner can approve; set Decision=Apply in the sheet or approve on the dashboard");
   const patch: Partial<Application> = { status, updatedAt: new Date(), ...(note ? { note } : {}) };
   if (status === "applied" && !app.appliedAt) {
     patch.appliedAt = new Date();

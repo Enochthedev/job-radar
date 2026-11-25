@@ -14,7 +14,7 @@ const Env = z.object({
 
   // Claude → MCP. Claude can draft and send approved drafts, never approve.
   MCP_BEARER_TOKEN: z.string().min(24),
-  // Wave → dashboard API (HQ app server-side). The only credential that can approve.
+  // Owner → dashboard API (e.g. the HQ app, server-side). The only credential that can approve.
   DASHBOARD_TOKEN: z.string().min(24),
   // Basic-auth password for the built-in /dashboard pages (defence in depth behind Cloudflare Access).
   DASHBOARD_PASSWORD: z.string().optional(),
@@ -22,7 +22,7 @@ const Env = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   TOKEN_ENC_KEY: z.string().optional(), // 32 bytes, base64 or hex
-  JOB_TRACKER_SHEET_ID: z.string().optional(),
+  JOB_TRACKER_SHEET_ID: z.string().optional(), // optional: otherwise a tracker sheet is created in the primary account
   PRIMARY_ACCOUNT_EMAIL: z.string().optional(), // account that owns the sheet + calendar
 
   GITHUB_TOKEN: z.string().optional(),
@@ -32,7 +32,9 @@ const Env = z.object({
   SENDING_ENABLED: bool,
   MAX_SENDS_PER_ACCOUNT_PER_DAY: z.coerce.number().default(15),
   PROFILE_PATH: z.string().default("profile.yaml"),
-  TZ_HOME: z.string().default("Africa/Lagos"),
+  TZ_HOME: z.string().optional(), // defaults to profile.yaml home.timezone
+  ALLOWED_RETURN_HOSTS: z.string().optional(), // hosts OAuth may redirect back to, comma-separated
+  GITHUB_USERNAME: z.string().optional(), // overrides profile.yaml candidate.github
 });
 
 export type Config = z.infer<typeof Env>;

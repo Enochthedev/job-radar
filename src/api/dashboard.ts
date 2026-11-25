@@ -21,7 +21,7 @@ table{width:100%;border-collapse:collapse;margin:16px 0}td,th{text-align:left;pa
 <h1>Job Radar</h1><p>Inbox connections. Approvals and the pipeline live in the HQ app and the Job Tracker sheet.</p>
 <span class="pill">Sending: <b class="${o.sendingEnabled ? "ok" : "bad"}">${o.sendingEnabled ? "on" : "off"}</b></span>
 <span class="pill">Google OAuth: <b class="${o.googleConfigured ? "ok" : "bad"}">${o.googleConfigured ? "configured" : "missing"}</b></span>
-<span class="pill">Sheet: <b class="${o.sheetConfigured ? "ok" : "bad"}">${o.sheetConfigured ? "set" : "missing"}</b></span>
+<span class="pill">Tracker sheet: <b class="${o.sheetConfigured ? "ok" : "bad"}">${o.sheetConfigured ? "ready" : "created on first sync"}</b></span>
 <table><thead><tr><th>Inbox</th><th>Label</th><th>Status</th><th>Last sync</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="5">No inboxes yet.</td></tr>`}</tbody></table>
 ${o.googleConfigured ? `<a class="btn" href="/oauth/google/start?primary=1&label=primary">Connect primary (mail + sheet + calendar)</a> &nbsp;
 <a class="btn" href="/oauth/google/start?label=cv">Connect another inbox (mail only)</a>` : ""}

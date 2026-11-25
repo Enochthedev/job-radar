@@ -3,6 +3,13 @@ import { googleFetch } from "./oauth.js";
 
 const BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
+export async function createSpreadsheet(account: Account, title: string): Promise<string> {
+  const r = await googleFetch<{ spreadsheetId: string }>(account, BASE, { method: "POST", body: JSON.stringify({ properties: { title } }) });
+  return r.spreadsheetId;
+}
+
+export const sheetUrl = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
+
 export async function ensureTab(account: Account, sheetId: string, title: string, header: string[]): Promise<void> {
   const meta = await googleFetch<{ sheets: { properties: { title: string; sheetId: number } }[] }>(account, `${BASE}/${sheetId}?fields=sheets.properties`);
   const existing = meta.sheets.find((s) => s.properties.title === title);

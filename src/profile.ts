@@ -5,6 +5,12 @@ import { z } from "zod";
 const Terms = z.object({ weight: z.number(), terms: z.array(z.string()) });
 
 export const ProfileSchema = z.object({
+  candidate: z.object({
+    name: z.string(),
+    citizenship: z.array(z.string()).default([]),
+    work_authorisation: z.array(z.string()).default([]),
+    github: z.string().optional(),
+  }),
   home: z.object({ city: z.string(), country: z.string(), timezone: z.string(), utc_offset: z.number() }),
   eligibility: z.object({
     reject: z.array(z.string()),

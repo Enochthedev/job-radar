@@ -14,7 +14,7 @@ export interface SendContext {
 }
 
 export function recipientAllowed(to: string, companyDomain: string | null, toSetBy: string | null): boolean {
-  if (toSetBy === "wave") return true; // Wave typed it
+  if (toSetBy === "owner") return true; // the owner typed it
   const domain = to.split("@")[1]?.toLowerCase().trim();
   if (!domain || !companyDomain) return false;
   const cd = companyDomain.toLowerCase();
@@ -34,10 +34,10 @@ export function refuseReason(c: SendContext): string | null {
   const d = c.draft;
   if (!c.sendingEnabled) return "sending is disabled (SENDING_ENABLED=false)";
   if (d.sentAt) return "draft was already sent";
-  if (!d.approvedAt || d.approvedBy !== "wave") return "draft is not approved by Wave";
+  if (!d.approvedAt || d.approvedBy !== "owner") return "draft is not approved by the owner";
   if (d.approvedHash !== d.contentHash) return "draft was edited after approval; it needs a fresh approval";
   if (!d.toAddress) return "draft has no recipient";
-  if (!recipientAllowed(d.toAddress, c.companyDomain, d.toSetBy)) return `recipient ${d.toAddress} doesn't match the company domain (${c.companyDomain ?? "unknown"}) and wasn't typed by Wave`;
+  if (!recipientAllowed(d.toAddress, c.companyDomain, d.toSetBy)) return `recipient ${d.toAddress} doesn't match the company domain (${c.companyDomain ?? "unknown"}) and wasn't typed by the owner`;
   if (c.accountStatus !== "connected") return `sending account is ${c.accountStatus ?? "missing"}; reconnect it on the dashboard`;
   if (c.sentTodayByAccount >= c.maxPerDay) return `daily limit reached (${c.maxPerDay} sends for this account)`;
   if (d.kind === "follow_up" && c.followUpCount >= c.maxFollowUps) return `already sent ${c.followUpCount} follow-ups (max ${c.maxFollowUps})`;

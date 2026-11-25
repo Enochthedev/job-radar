@@ -1,8 +1,12 @@
 # Job Radar
 
-One TypeScript MCP server that pulls remote jobs from public feeds, keeps only the ones a Lagos-based engineer can legally take, scores them, and tracks every application and email thread across several Gmail inboxes. Claude connects to it as a custom connector; Claude drafts, Wave approves, Job Radar sends.
+One TypeScript MCP server that pulls remote jobs from public feeds, keeps only the ones the candidate can legally take from where they live, scores them, and tracks every application and email thread across several Gmail inboxes. Claude connects to it as a custom connector; Claude drafts, the owner approves, Job Radar sends.
 
-**Rule that holds it together:** Claude can draft anything, but nothing leaves without an approval row written by Wave (Job Tracker sheet or the HQ dashboard). `approve` is not an MCP tool.
+**Rule that holds it together:** Claude can draft anything, but nothing leaves without an approval row written by the owner (tracker sheet or a dashboard using `DASHBOARD_TOKEN`). `approve` is not an MCP tool.
+
+## Make it yours
+
+Everything about the candidate lives in `profile.yaml`: `candidate` (name, citizenship, work authorisation, GitHub handle), `home` (city, timezone), the eligibility phrases, target roles, level rules, scoring weights, and the company watchlist. Connect your Gmail on `/dashboard`. The tracker sheet ("Job Radar Tracker", tab *Shortlist*) is created in your primary inbox's Drive on the first sync, so there's nothing to set up by hand. Set `JOB_TRACKER_SHEET_ID` only to reuse an existing sheet.
 
 ## Pieces
 

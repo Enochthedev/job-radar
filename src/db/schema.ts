@@ -8,7 +8,7 @@ export const appStatusEnum = pgEnum("app_status", [
 ]);
 export const channelEnum = pgEnum("app_channel", ["form", "email", "referral"]);
 export const draftKindEnum = pgEnum("draft_kind", ["note", "cold_email", "follow_up"]);
-export const actorEnum = pgEnum("actor", ["claude", "wave", "system"]);
+export const actorEnum = pgEnum("actor", ["claude", "owner", "system"]);
 
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
@@ -57,6 +57,7 @@ export const accounts = pgTable("accounts", {
   status: text("status").notNull().default("connected"), // connected | expired | error
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
   lastHistoryId: text("last_history_id"),
+  sheetId: text("sheet_id"), // tracker spreadsheet Job Radar created in this account
   connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("accounts_provider_email").on(t.provider, t.email)]);
 

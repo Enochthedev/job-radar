@@ -14,7 +14,7 @@ import { approveDraft, editDraft, sendEmail } from "../services/drafts.js";
 import { inboxDigest } from "../services/inbox.js";
 import { refreshSources } from "../services/ingest.js";
 import { draftView, getJob, searchJobs, stats, updateStatus, type AppStatus } from "../services/jobs.js";
-import { pollSheet, syncSheet } from "../services/sheet.js";
+import { pollSheet, syncSheet, trackerSheet } from "../services/sheet.js";
 import { dashboardHtml } from "./dashboard.js";
 
 const c = config();
@@ -52,19 +52,20 @@ app.all("/mcp/:token", async (ctx) => {
   return handleMcp(ctx);
 });
 
-// ── Dashboard API (Wave, via the HQ app server-side) ─────────────────────────
+// ── Dashboard API (the owner, via a dashboard app server-side) ─────────────────────────
 // DASHBOARD_TOKEN is separate from the MCP token: it is the only credential that can approve.
 const api = new Hono();
 api.use("*", bearer(c.DASHBOARD_TOKEN));
 
 api.get("/overview", async (ctx) => {
-  const [s, accts, pending] = await Promise.all([
+  const [s, accts, pending, sheet] = await Promise.all([
     stats("30d"),
     db().select().from(accounts).orderBy(desc(accounts.connectedAt)),
     db().select({ n: dsql<number>`count(*)::int` }).from(drafts).where(isNull(drafts.sentAt)),
+    trackerSheet().catch(() => null),
   ]);
   return ctx.json({
-    stats: s, sending_enabled: c.SENDING_ENABLED, google_configured: googleConfigured(), sheet_configured: Boolean(c.JOB_TRACKER_SHEET_ID),
+    stats: s, sending_enabled: c.SENDING_ENABLED, google_configured: googleConfigured(), sheet_configured: googleConfigured(), sheet_url: sheet?.url ?? null,
     accounts: accts.map((a) => ({ id: a.id, email: a.email, label: a.label, status: a.status, last_sync_at: a.lastSyncAt, scopes: a.scopes })),
     unsent_drafts: pending[0]?.n ?? 0,
   });
@@ -94,13 +95,13 @@ api.get("/jobs/:id", async (ctx) => { const j = await getJob(Number(ctx.req.para
 
 api.patch("/drafts/:id", async (ctx) => {
   const b = await ctx.req.json<{ subject?: string | null; body?: string; to?: string | null; account?: string }>();
-  return ctx.json(draftView(await editDraft(Number(ctx.req.param("id")), b, "wave")));
+  return ctx.json(draftView(await editDraft(Number(ctx.req.param("id")), b, "owner")));
 });
 api.post("/drafts/:id/approve", async (ctx) => ctx.json(await approveDraft(Number(ctx.req.param("id")), "dashboard")));
-api.post("/drafts/:id/send", async (ctx) => ctx.json(await sendEmail(Number(ctx.req.param("id")), "wave")));
+api.post("/drafts/:id/send", async (ctx) => ctx.json(await sendEmail(Number(ctx.req.param("id")), "owner")));
 api.post("/applications/:id/status", async (ctx) => {
   const b = await ctx.req.json<{ status: AppStatus; note?: string }>();
-  return ctx.json(await updateStatus(Number(ctx.req.param("id")), b.status, b.note, "wave"));
+  return ctx.json(await updateStatus(Number(ctx.req.param("id")), b.status, b.note, "owner"));
 });
 api.post("/refresh", async (ctx) => ctx.json(await refreshSources(ctx.req.query("source") || undefined)));
 api.post("/sheet/sync", async (ctx) => ctx.json({ push: await syncSheet(), pull: await pollSheet() }));
@@ -119,12 +120,12 @@ app.route("/api", api);
 // ── Browser routes: dashboard + OAuth ────────────────────────────────────────
 // Cloudflare Access sits in front; basic auth is a second lock if it's ever misconfigured.
 const pageAuth = c.DASHBOARD_PASSWORD
-  ? basicAuth({ username: "wave", password: c.DASHBOARD_PASSWORD })
+  ? basicAuth({ username: "owner", password: c.DASHBOARD_PASSWORD })
   : async (ctx: Context) => ctx.text("Set DASHBOARD_PASSWORD to enable the dashboard", 503);
 
 app.get("/dashboard", pageAuth, async (ctx) => {
   const accts = await db().select().from(accounts).orderBy(desc(accounts.connectedAt));
-  return ctx.html(dashboardHtml({ accounts: accts, sendingEnabled: c.SENDING_ENABLED, googleConfigured: googleConfigured(), sheetConfigured: Boolean(c.JOB_TRACKER_SHEET_ID) }));
+  return ctx.html(dashboardHtml({ accounts: accts, sendingEnabled: c.SENDING_ENABLED, googleConfigured: googleConfigured(), sheetConfigured: Boolean(c.JOB_TRACKER_SHEET_ID || accts.some((a) => a.sheetId)) }));
 });
 
 app.get("/oauth/google/start", pageAuth, (ctx) => {
@@ -134,7 +135,8 @@ app.get("/oauth/google/start", pageAuth, (ctx) => {
   return ctx.redirect(authUrl(state, primary, ctx.req.query("hint")));
 });
 
-const RETURN_HOSTS = ["app.wavedidwhat.com", "hq.dev.wavedidwhat.com", "localhost"];
+// Where the OAuth callback may send the browser back to (e.g. the HQ app). Comma-separated hostnames.
+const RETURN_HOSTS = ["localhost", ...(c.ALLOWED_RETURN_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean)];
 app.get("/oauth/google/callback", async (ctx) => {
   const err = ctx.req.query("error");
   if (err) return ctx.text(`Google said: ${err}`, 400);

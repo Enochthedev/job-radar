@@ -3,7 +3,7 @@ import { config } from "../config.js";
 import { db, logEvent } from "../db/client.js";
 import { accounts, applications, drafts, jobs, scores } from "../db/schema.js";
 import { primaryAccount } from "../google/oauth.js";
-import { appendRows, ensureTab, readRange, writeRange } from "../google/sheets.js";
+import { appendRows, createSpreadsheet, ensureTab, readRange, sheetUrl, writeRange } from "../google/sheets.js";
 import { addJob, updateStatus } from "./jobs.js";
 import { approveDraft, editDraft } from "./drafts.js";
 
@@ -13,13 +13,28 @@ const col = (name: string) => HEADER.indexOf(name);
 const RANGE = `${TAB}!A1:Q2000`;
 const SYNCED_STATUSES = ["shortlisted", "approved", "applied", "replied", "interviewing", "offer", "rejected", "ghosted", "skipped"] as const;
 
+/**
+ * The tracker sheet: JOB_TRACKER_SHEET_ID if set, else the one Job Radar created in the
+ * primary account, else a new "Job Radar Tracker" spreadsheet created now. Works for any
+ * account that connected with the Sheets scope; nothing to set up by hand.
+ */
 async function sheetCtx() {
-  const id = config().JOB_TRACKER_SHEET_ID;
-  if (!id) throw new Error("JOB_TRACKER_SHEET_ID is not set");
   const acct = await primaryAccount();
-  if (!acct) throw new Error("no connected Google account with Sheets access; connect the primary account on the dashboard");
+  if (!acct) throw new Error("no connected Google account with Sheets access; connect the primary inbox on the dashboard");
+  let id = config().JOB_TRACKER_SHEET_ID || acct.sheetId;
+  if (!id) {
+    id = await createSpreadsheet(acct, "Job Radar Tracker");
+    await db().update(accounts).set({ sheetId: id }).where(eq(accounts.id, acct.id));
+    await logEvent("system", "sheet.created", { account: acct.email, sheet_id: id });
+  }
   await ensureTab(acct, id, TAB, HEADER);
   return { id, acct };
+}
+
+export async function trackerSheet(): Promise<{ id: string; url: string } | null> {
+  const acct = await primaryAccount();
+  const id = config().JOB_TRACKER_SHEET_ID || acct?.sheetId;
+  return id ? { id, url: sheetUrl(id) } : null;
 }
 
 async function latestDrafts(appIds: number[]) {
@@ -56,7 +71,7 @@ export async function syncSheet() {
       ]);
       added++;
     } else {
-      // Only Job Radar-owned columns are rewritten; Decision/To/Subject/Draft stay Wave's to edit.
+      // Only Job Radar-owned columns are rewritten; Decision/To/Subject/Draft stay the owner's to edit.
       const cur = values[row - 1] ?? [];
       const want = { Status: a.status, "Draft ID": d?.id ?? "", Approved: d?.approvedAt?.toISOString() ?? "", Score: s?.score ?? "" };
       const changed = Object.entries(want).some(([k, v]) => String(cur[col(k)] ?? "") !== String(v));
@@ -76,10 +91,10 @@ export async function syncSheet() {
   }
   if (toAppend.length) await appendRows(acct, id, `${TAB}!A1`, toAppend);
   await logEvent("system", "sheet.synced", { added, updated });
-  return { added, updated };
+  return { added, updated, sheet_url: sheetUrl(id) };
 }
 
-/** Pull: Wave's Decision column → approvals/skips; Wave's edits to To/Subject/Draft → the draft; new manual rows → add_job. */
+/** Pull: the owner's Decision column → approvals/skips; the owner's edits to To/Subject/Draft → the draft; new manual rows → add_job. */
 export async function pollSheet() {
   const { id, acct } = await sheetCtx();
   const values = await readRange(acct, id, RANGE);
@@ -94,7 +109,7 @@ export async function pollSheet() {
       if (!appId) {
         const link = get("Link");
         if (/^https?:\/\//.test(link)) {
-          const job = await addJob(link, "wave");
+          const job = await addJob(link, "owner");
           const jobId = job && "id" in job ? job.id : null;
           if (jobId) {
             const [app] = await db().insert(applications).values({ jobId, status: "shortlisted", note: get("Notes") || null }).onConflictDoNothing().returning();
@@ -109,21 +124,21 @@ export async function pollSheet() {
       const [app] = await db().select().from(applications).where(eq(applications.id, appId));
       if (!app) continue;
       if (decision === "skip" && app.status === "shortlisted") {
-        await updateStatus(appId, "skipped", "skipped in sheet", "wave"); out.skipped++; continue;
+        await updateStatus(appId, "skipped", "skipped in sheet", "owner"); out.skipped++; continue;
       }
       const draftId = Number(get("Draft ID"));
       if (!draftId) {
-        if (decision === "apply" && app.status === "shortlisted") { await updateStatus(appId, "approved", "approved in sheet (no draft)", "wave"); out.approved++; }
+        if (decision === "apply" && app.status === "shortlisted") { await updateStatus(appId, "approved", "approved in sheet (no draft)", "owner"); out.approved++; }
         continue;
       }
       const [d] = await db().select().from(drafts).where(and(eq(drafts.id, draftId), eq(drafts.applicationId, appId)));
       if (!d || d.sentAt) continue;
-      // Wave's edits in the sheet win. An edit after approval voids it (hash changes) until Apply is re-read below.
+      // The owner's edits in the sheet win. An edit after approval voids it (hash changes) until Apply is re-read below.
       const patch: Parameters<typeof editDraft>[1] = {};
       if (get("Draft") && get("Draft") !== d.body) patch.body = get("Draft");
       if (get("Subject") !== (d.subject ?? "")) patch.subject = get("Subject") || null;
       if (get("To").toLowerCase() !== (d.toAddress ?? "")) patch.to = get("To") || null;
-      if (Object.keys(patch).length) { await editDraft(draftId, patch, "wave"); out.edited++; }
+      if (Object.keys(patch).length) { await editDraft(draftId, patch, "owner"); out.edited++; }
       const [fresh] = await db().select().from(drafts).where(eq(drafts.id, draftId));
       const approvalValid = fresh.approvedAt && fresh.approvedHash === fresh.contentHash;
       if (decision === "apply" && !approvalValid) { await approveDraft(draftId, "sheet", now); out.approved++; }

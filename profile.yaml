@@ -1,10 +1,16 @@
 # Job Radar profile — edit and restart radar-worker (or call refresh_sources) to apply.
 # No deploy needed: this file is mounted into the containers.
 
+# Who the radar is searching for. Everything candidate-specific lives here.
+candidate:
+  name: Wave
+  citizenship: [Nigeria]          # passports held
+  work_authorisation: [Nigeria]   # where you can already work without sponsorship
+  github: Enochthedev             # used by list_projects to pick proof projects
 home: { city: Lagos, country: Nigeria, timezone: Africa/Lagos, utc_offset: 1 }
 
 eligibility:
-  reject:   # phrases that mean Wave can't legally take the role from Lagos
+  reject:   # phrases that mean the candidate can't legally take the role from home
     - "us only"
     - "usa only"
     - "u.s. only"
@@ -21,7 +27,7 @@ eligibility:
     - "europe only"
     - "latam only"
     - "americas only"
-  keep:     # phrases that mean it's open to Lagos
+  keep:     # phrases that mean it's open to the candidate's home
     - "worldwide"
     - "anywhere"
     - "global"

@@ -16,6 +16,6 @@ export function db() {
   return _db;
 }
 
-export async function logEvent(actor: "claude" | "wave" | "system", type: string, payload: Record<string, unknown> = {}) {
+export async function logEvent(actor: "claude" | "owner" | "system", type: string, payload: Record<string, unknown> = {}) {
   await db().insert(schema.events).values({ actor, type, payload });
 }

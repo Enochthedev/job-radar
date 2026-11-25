@@ -24,7 +24,8 @@ async function schedule() {
   await queue.upsertJobScheduler("rescore", every(24 * H), { name: "rescore", data: { kind: "rescore" } satisfies Job, opts });
   if (googleConfigured()) {
     await queue.upsertJobScheduler("inbox", every(15 * M), { name: "inbox", data: { kind: "inbox" } satisfies Job, opts: { ...opts, attempts: 1 } });
-    if (c.JOB_TRACKER_SHEET_ID) {
+    {
+      // Runs even without JOB_TRACKER_SHEET_ID: the tracker is created on first sync.
       await queue.upsertJobScheduler("sheet-poll", every(5 * M), { name: "sheet-poll", data: { kind: "sheet-poll" } satisfies Job, opts: { ...opts, attempts: 1 } });
       await queue.upsertJobScheduler("sheet-sync", every(30 * M), { name: "sheet-sync", data: { kind: "sheet-sync" } satisfies Job, opts: { ...opts, attempts: 1 } });
     }

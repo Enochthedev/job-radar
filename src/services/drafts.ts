@@ -9,7 +9,7 @@ import { sha256 } from "../text.js";
 import { refuseReason } from "./guardrails.js";
 import { draftView, ensureApplication } from "./jobs.js";
 
-type Actor = "claude" | "wave" | "system";
+type Actor = "claude" | "owner" | "system";
 const hashOf = (d: { subject?: string | null; body: string; toAddress?: string | null; accountId?: number | null }) =>
   sha256(JSON.stringify([d.subject ?? "", d.body, d.toAddress ?? "", d.accountId ?? null]));
 
@@ -29,7 +29,7 @@ export async function saveDraft(o: { job_id: number; kind: Draft["kind"]; subjec
   return { draft_id: d.id, application_id: app.id, needs_approval: o.kind !== "note" };
 }
 
-/** Wave edits a draft (sheet or dashboard). Any edit after approval voids the approval via the hash. */
+/** The owner edits a draft (sheet or dashboard). Any edit after approval voids the approval via the hash. */
 export async function editDraft(id: number, patch: { subject?: string | null; body?: string; to?: string | null; account?: string }, actor: Actor) {
   const [d] = await db().select().from(drafts).where(eq(drafts.id, id));
   if (!d) throw new Error(`draft ${id} not found`);
@@ -54,10 +54,10 @@ export async function approveDraft(id: number, source: "sheet" | "dashboard", at
   const [d] = await db().select().from(drafts).where(eq(drafts.id, id));
   if (!d) throw new Error(`draft ${id} not found`);
   if (d.sentAt) throw new Error("draft already sent");
-  const [row] = await db().update(drafts).set({ approvedAt: at, approvedBy: "wave", approvedHash: d.contentHash }).where(eq(drafts.id, id)).returning();
+  const [row] = await db().update(drafts).set({ approvedAt: at, approvedBy: "owner", approvedHash: d.contentHash }).where(eq(drafts.id, id)).returning();
   const [app] = await db().select().from(applications).where(eq(applications.id, d.applicationId));
   if (app && app.status === "shortlisted") await db().update(applications).set({ status: "approved", updatedAt: new Date() }).where(eq(applications.id, app.id));
-  await logEvent("wave", "draft.approved", { draft_id: id, application_id: d.applicationId, source, content_hash: d.contentHash });
+  await logEvent("owner", "draft.approved", { draft_id: id, application_id: d.applicationId, source, content_hash: d.contentHash });
   return draftView(row);
 }
 
@@ -75,12 +75,12 @@ export async function sendEmail(draftId: number, actor: Actor = "claude") {
   const c = config();
   const [d] = await db().select().from(drafts).where(eq(drafts.id, draftId));
   if (!d) throw new Error(`draft ${draftId} not found`);
-  if (d.kind === "note") throw new Error("notes are for application forms; Claude fills the form and Wave submits it");
+  if (d.kind === "note") throw new Error("notes are for application forms; Claude fills the form and the owner submits it");
   const [app] = await db().select().from(applications).where(eq(applications.id, d.applicationId));
   const [job] = await db().select().from(jobs).where(eq(jobs.id, app.jobId));
   const [acct] = d.accountId ? await db().select().from(accounts).where(eq(accounts.id, d.accountId)) : [];
   const [{ n: sentToday }] = acct
-    ? await db().select({ n: dsql<number>`count(*)::int` }).from(drafts).where(and(eq(drafts.accountId, acct.id), gte(drafts.sentAt, startOfDayIn(c.TZ_HOME))))
+    ? await db().select({ n: dsql<number>`count(*)::int` }).from(drafts).where(and(eq(drafts.accountId, acct.id), gte(drafts.sentAt, startOfDayIn(c.TZ_HOME ?? loadProfile().home.timezone))))
     : [{ n: 0 }];
 
   const reason = refuseReason({
