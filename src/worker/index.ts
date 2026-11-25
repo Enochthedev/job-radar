@@ -1,6 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import { config, googleConfigured } from "../config.js";
 import { logEvent } from "../db/client.js";
+import { primaryAccount } from "../google/oauth.js";
 import { syncAllInboxes } from "../services/inbox.js";
 import { refreshSources, rescoreAll } from "../services/ingest.js";
 import { pollSheet, syncSheet } from "../services/sheet.js";
@@ -37,8 +38,9 @@ const worker = new Worker<Job>(QUEUE, async (job) => {
   switch (d.kind) {
     case "source": return refreshSources(d.source);
     case "inbox": return syncAllInboxes();
-    case "sheet-poll": return pollSheet();
-    case "sheet-sync": return syncSheet();
+    // Nothing to do until an inbox with Sheets access is connected; skip instead of failing every 5 min.
+    case "sheet-poll": return (await primaryAccount()) ? pollSheet() : { skipped: "no primary inbox connected" };
+    case "sheet-sync": return (await primaryAccount()) ? syncSheet() : { skipped: "no primary inbox connected" };
     case "rescore": return rescoreAll();
   }
 }, { connection, concurrency: 1 });
