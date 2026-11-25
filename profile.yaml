@@ -1,0 +1,124 @@
+# Job Radar profile — edit and restart radar-worker (or call refresh_sources) to apply.
+# No deploy needed: this file is mounted into the containers.
+
+home: { city: Lagos, country: Nigeria, timezone: Africa/Lagos, utc_offset: 1 }
+
+eligibility:
+  reject:   # phrases that mean Wave can't legally take the role from Lagos
+    - "us only"
+    - "usa only"
+    - "u.s. only"
+    - "united states only"
+    - "must reside in"
+    - "must be located in the (us|u\\.s\\.|united states|uk|eu|canada)"
+    - "eu work authori[sz]ation"
+    - "authori[sz]ed to work in the (us|u\\.s\\.|united states|uk|eu)"
+    - "security clearance"
+    - "us citizen"
+    - "green card"
+    - "canada only"
+    - "uk only"
+    - "europe only"
+    - "latam only"
+    - "americas only"
+  keep:     # phrases that mean it's open to Lagos
+    - "worldwide"
+    - "anywhere"
+    - "global"
+    - "emea"
+    - "africa"
+    - "nigeria"
+    - "lagos"
+    - "utc\\s?[±+-]\\s?[0-3]\\b"
+    - "gmt\\s?[±+-]\\s?[0-3]\\b"
+    - "deel"
+    - "remote\\.com"
+    - "oyster"
+    - "visa sponsorship"
+  # A location string made only of these means a hard restriction.
+  restricted_locations:
+    - "united states"
+    - "usa"
+    - "us"
+    - "canada"
+    - "united kingdom"
+    - "uk"
+    - "germany"
+    - "france"
+    - "spain"
+    - "netherlands"
+    - "poland"
+    - "portugal"
+    - "india"
+    - "brazil"
+    - "mexico"
+    - "latam"
+    - "americas"
+    - "north america"
+    - "australia"
+    - "new zealand"
+    - "philippines"
+  us_states: [alabama, alaska, arizona, arkansas, california, colorado, connecticut, delaware, florida, georgia, hawaii, idaho, illinois, indiana, iowa, kansas, kentucky, louisiana, maine, maryland, massachusetts, michigan, minnesota, mississippi, missouri, montana, nebraska, nevada, "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", ohio, oklahoma, oregon, pennsylvania, "rhode island", "south carolina", "south dakota", tennessee, texas, utah, vermont, virginia, washington, "west virginia", wisconsin, wyoming, "san francisco", "nyc", "bay area", "seattle", "austin", "boston", "los angeles"]
+
+roles:   # title must match one of these (regex, case-insensitive)
+  - "back[- ]?end"
+  - "full[- ]?stack"
+  - "platform engineer"
+  - "product engineer"
+  - "forward[- ]deployed"
+  - "\\bai engineer"
+  - "\\bllm engineer"
+  - "ml engineer"
+  - "developer support"
+  - "support engineer"
+  - "solutions engineer"
+  - "software engineer"
+  - "node(\\.js)? (developer|engineer)"
+  - "typescript (developer|engineer)"
+  - "golang|go (developer|engineer)"
+  - "infrastructure engineer"
+
+title_exclude:  # titles that match a role word but aren't engineering roles
+  - "sales"
+  - "account executive"
+  - "recruiter"
+  - "designer"
+  - "marketing"
+  - "android"
+  - "\\bios\\b"
+  - "data analyst"
+  - "manager"
+  - "director"
+  - "\\bvp\\b"
+  - "head of"
+
+level:
+  reject_title: ["\\bstaff\\b", "principal", "distinguished", "\\barchitect\\b", "\\bintern\\b", "\\bjunior\\b", "\\bjr\\.?\\b", "graduate", "entry[- ]level", "new grad"]
+  reject_text: ["(8|9|10|12|15)\\+?\\s*years", "(eight|nine|ten)\\+? years"]
+
+score:
+  stack: { weight: 30, terms: [typescript, node, "node.js", nodejs, go, golang, postgres, postgresql, redis] }
+  domain: { weight: 20, terms: [payments, fintech, stripe, "ai", llm, "machine learning", "developer tools", "dev tools", devtools, "developer experience", sdk, api, support, helpdesk, "customer support", agents] }
+  pay: { weight: 15, floor_usd_year: 60000 }
+  stage: { weight: 10, terms: ["seed", "series a", "series b", "y combinator", "yc ", "(yc", "early[- ]stage", "startup"] }
+  fresh: { weight: 10, hours: 72 }
+  remote_worldwide: { weight: 10 }
+  watchlist: { weight: 5 }
+
+shortlist: { size: 12, min_score: 60 }
+
+# Companies whose own job boards are read directly (Greenhouse / Lever / Ashby).
+# board = the slug in the board URL. yc: true marks YC companies for the stage signal.
+watchlist:
+  - { name: Vercel, ats: greenhouse, board: vercel }
+  - { name: Supabase, ats: ashby, board: supabase, yc: true }
+  - { name: PostHog, ats: ashby, board: posthog, yc: true }
+  - { name: Resend, ats: ashby, board: resend, yc: true }
+  - { name: Railway, ats: ashby, board: railway }
+  - { name: Linear, ats: ashby, board: linear }
+  - { name: Deel, ats: ashby, board: deel }
+  - { name: GitLab, ats: greenhouse, board: gitlab }
+  - { name: Sourcegraph, ats: greenhouse, board: sourcegraph91 }
+
+follow_up_days: [4, 10]
+max_follow_ups: 2

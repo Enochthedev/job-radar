@@ -1,0 +1,89 @@
+# Job Radar stack. RDK overlays the proxy network + traefik labels on `api` only;
+# Postgres and Redis stay on the private compose network (no published ports).
+#
+# Deploy: rdk connect (once), then rdk up
+
+x-app: &app
+  build: { context: ., dockerfile: ./Dockerfile }
+  image: job-radar:latest
+  restart: unless-stopped
+  env_file:
+    - ${APP_ENV_FILE:-./.env.remote.app}
+  environment:
+    DATABASE_URL: postgres://radar:${POSTGRES_PASSWORD}@radar-db:5432/radar
+    REDIS_URL: redis://radar-redis:6379
+  depends_on:
+    radar-db: { condition: service_healthy }
+    radar-redis: { condition: service_healthy }
+
+services:
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["node", "dist/db/migrate.js"]
+
+  api:
+    <<: *app
+    command: ["node", "dist/api/index.js"]
+    expose: ["8080"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["node", "dist/worker/index.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  radar-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: radar
+      POSTGRES_DB: radar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [radar_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar -d radar"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  radar-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [radar_redis:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Nightly pg_dump at ~03:00 UTC. Files are named by weekday, so a week of dumps
+  # rotates by overwriting. Uploading to Cloudflare R2 is a follow-up.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [radar_backups:/backups]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          sleep $$(( (86400 + 3*3600 - $$(date +%s) % 86400) % 86400 + 60 ))
+          pg_dump -h radar-db -U radar -d radar -Fc -f /backups/radar-$$(date +%a).dump && echo "backup ok"
+        done
+    depends_on:
+      radar-db: { condition: service_healthy }
+
+volumes:
+  radar_pg:
+  radar_redis:
+  radar_backups:
