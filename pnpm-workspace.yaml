@@ -1,0 +1,5 @@
+# Build scripts are opt-in. None are needed at runtime: esbuild is only used by
+# drizzle-kit/vitest, and msgpackr has a pure-JS fallback.
+allowBuilds:
+  esbuild: false
+  msgpackr-extract: false
