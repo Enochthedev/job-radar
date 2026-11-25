@@ -138,3 +138,16 @@ export async function sendEmail(draftId: number, actor: Actor = "claude") {
   });
   return { gmail_message_id: sent.id, thread_id: sent.threadId, from: acct!.email, to: d.toAddress };
 }
+
+/** Drafts the owner approved, unchanged since approval, not yet sent: what send_email should take next. */
+export async function readyToSend() {
+  const rows = await db().select({ d: drafts, j: jobs, a: accounts }).from(drafts)
+    .innerJoin(applications, eq(applications.id, drafts.applicationId))
+    .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .leftJoin(accounts, eq(accounts.id, drafts.accountId))
+    .where(and(isNull(drafts.sentAt), isNotNull(drafts.approvedAt), eq(drafts.approvedHash, drafts.contentHash)));
+  return rows.filter((r) => r.d.kind !== "note").map((r) => ({
+    draft_id: r.d.id, kind: r.d.kind, company: r.j.company, title: r.j.title, to: r.d.toAddress, subject: r.d.subject,
+    account: r.a?.email ?? null, approved_at: r.d.approvedAt,
+  }));
+}

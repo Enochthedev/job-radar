@@ -4,7 +4,7 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { db } from "../db/client.js";
 import { accounts } from "../db/schema.js";
-import { sendEmail, saveDraft } from "../services/drafts.js";
+import { readyToSend, sendEmail, saveDraft } from "../services/drafts.js";
 import { listProjects } from "../services/github.js";
 import { inboxDigest } from "../services/inbox.js";
 import { refreshSources } from "../services/ingest.js";
@@ -24,7 +24,7 @@ export function buildMcpServer(): McpServer {
   const s = new McpServer({ name: "job-radar", version: "0.1.0" }, {
     instructions: [
       `Job Radar finds remote roles ${who} (${prof.home.city}, ${prof.home.country}, ${prof.home.timezone}) can legally take, tracks applications, and sends approved emails.`,
-      "Daily flow: refresh_sources → shortlist → save_draft (one note or cold email per role) → sync_sheet.",
+      "Daily flow: refresh_sources → inbox_digest → ready_to_send → send_email each → follow_ups_due → shortlist → save_draft per role → sync_sheet.",
       `You can draft anything, but you cannot approve. ${who} approves in the Job Tracker sheet (Decision=Apply) or on the dashboard.`,
       `send_email only works on drafts ${who} approved and hasn't edited since. If it refuses, report the reason; don't work around it.`,
       `Form roles: fill the form in the browser, let ${who} click submit, then update_status(applied).`,
@@ -90,6 +90,13 @@ export function buildMcpServer(): McpServer {
     inputSchema: { draft_id: z.number().int() },
     annotations: { destructiveHint: true, openWorldHint: true },
   }, wrap(({ draft_id }) => sendEmail(draft_id, "claude")));
+
+  s.registerTool("ready_to_send", {
+    title: "Approved emails ready to send",
+    description: "Email drafts the owner approved and hasn't edited since, not yet sent. Call send_email on each.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  }, wrap(() => readyToSend()));
 
   s.registerTool("update_status", {
     title: "Update application status",

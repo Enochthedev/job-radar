@@ -34,7 +34,7 @@ Three hard gates, then a 0–100 score. All rules live in `profile.yaml`.
 
 ## MCP tools
 
-`search_jobs`, `get_job`, `add_job`, `refresh_sources`, `shortlist`, `save_draft`, `send_email`, `update_status`, `inbox_digest`, `follow_ups_due`, `list_accounts`, `sync_sheet`, `stats`, `list_projects`.
+`search_jobs`, `get_job`, `add_job`, `refresh_sources`, `shortlist`, `save_draft`, `ready_to_send`, `send_email`, `update_status`, `inbox_digest`, `follow_ups_due`, `list_accounts`, `sync_sheet`, `stats`, `list_projects`.
 
 Auth: `Authorization: Bearer $MCP_BEARER_TOKEN`, or `https://<host>/mcp/<token>` for clients (like claude.ai custom connectors) that only take a URL.
 
