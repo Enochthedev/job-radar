@@ -10,6 +10,19 @@ import { updateStatus } from "./jobs.js";
 const JOB_WORDS = /\b(application|applied|interview|position|role|candidate|candidacy|recruit(er|ing)?|hiring|offer|opportunit(y|ies)|resume|cv|assessment|take[- ]home|screening|next steps)\b/i;
 const MEETING_WORDS = /\b(interview|call|chat|meet(ing)?|schedule[d]?|calendar|zoom|google meet|teams|available|availability)\b/i;
 const ATS_SENDERS = /greenhouse|lever\.co|ashbyhq|workable|smartrecruiters|bamboohr|recruitee|teamtailor|breezy|jazzhr|rippling|myworkday/i;
+// Senders that mention "role" or "opportunity" but are never a reply to an application.
+const NOT_REPLIES = /(^|\.)(substack\.com|quora\.com|linkedin\.com|medium\.com|luma-mail\.com|beehiiv\.com|mailchimp|sendgrid\.net|google\.com)$|noreply|no-reply|newsletter|digest|marketing|updates?@|team@mail\./i;
+
+/** Accepts an ISO time, or a relative "72h" / "3d". */
+export function parseSince(v: string | undefined, fallbackMs: number): Date {
+  if (!v) return new Date(Date.now() - fallbackMs);
+  const rel = /^(\d+)\s*([hd])$/i.exec(v.trim());
+  if (rel) return new Date(Date.now() - Number(rel[1]) * (rel[2]!.toLowerCase() === "d" ? 86400_000 : 3600_000));
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) throw new Error(`since must be an ISO time or like "72h" / "3d", got "${v}"`);
+  return d;
+}
+
 const MATCHABLE = ["approved", "applied", "replied", "interviewing"] as const;
 
 interface Candidate { appId: number; status: string; company: string; domain: string | null }
@@ -50,7 +63,9 @@ export async function syncAccount(acct: Account, opts: { since?: Date; dryRun?: 
     let appId = thread?.applicationId ?? null;
     let how = appId ? "thread" : null;
     if (!appId) { const c = matchByCompany(m, cands); if (c) { appId = c.appId; how = "company"; } }
-    const jobRelated = Boolean(appId) || JOB_WORDS.test(`${m.subject} ${m.text.slice(0, 1500)}`);
+    const fromDomain = m.fromEmail.split("@")[1] ?? "";
+    const looksLikeReply = ATS_SENDERS.test(fromDomain) || (!NOT_REPLIES.test(m.fromEmail) && JOB_WORDS.test(m.subject));
+    const jobRelated = Boolean(appId) || looksLikeReply;
     if (!jobRelated) continue;
 
     const meta = appId ? titles.get(appId) : undefined;
@@ -121,11 +136,13 @@ export async function syncAllInboxes() {
 
 /** For the inbox_digest tool: what's come in, from the stored thread index (kept fresh every 15 min). */
 export async function inboxDigest(o: { since?: string; account?: string }) {
-  const since = o.since ? new Date(o.since) : new Date(Date.now() - 24 * 3600_000);
+  const since = parseSince(o.since, 24 * 3600_000);
   const rows = await db().select({ t: threads, a: accounts }).from(threads).innerJoin(accounts, eq(accounts.id, threads.accountId))
     .where(and(gte(threads.lastMessageAt, since), eq(threads.direction, "inbound"), eq(threads.jobRelated, true)))
     .orderBy(desc(threads.lastMessageAt)).limit(100);
-  const filtered = o.account ? rows.filter((r) => r.a.email === o.account!.toLowerCase() || r.a.label?.toLowerCase() === o.account!.toLowerCase()) : rows;
+  // Threads stored before the stricter filter: drop newsletters unless linked to an application.
+  const relevant = rows.filter((r) => r.t.applicationId || !NOT_REPLIES.test(r.t.fromAddress ?? ""));
+  const filtered = o.account ? relevant.filter((r) => r.a.email === o.account!.toLowerCase() || r.a.label?.toLowerCase() === o.account!.toLowerCase()) : relevant;
   const appIds = [...new Set(filtered.map((r) => r.t.applicationId).filter((x): x is number => x !== null))];
   const apps = appIds.length ? await db().select({ id: applications.id, status: applications.status, company: jobs.company, title: jobs.title })
     .from(applications).innerJoin(jobs, eq(jobs.id, applications.jobId)).where(inArray(applications.id, appIds)) : [];

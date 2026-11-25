@@ -111,7 +111,7 @@ export function buildMcpServer(): McpServer {
   s.registerTool("inbox_digest", {
     title: "Inbox digest",
     description: "Job-related mail across connected inboxes since a time (default 24h): replies matched to applications, and unmatched job mail. Snippets only, never raw HTML.",
-    inputSchema: { since: z.string().optional(), account: z.string().optional() },
+    inputSchema: { since: z.string().optional().describe('ISO time or relative like "72h" / "3d"; default 24h'), account: z.string().optional() },
     annotations: { readOnlyHint: true },
   }, wrap(inboxDigest));
 
