@@ -29,7 +29,7 @@ export async function searchJobs(o: { query?: string; min_score?: number; eligib
   if (!o.include_rejected) where.push(eq(jobs.rejected, false));
   if (o.eligibility) where.push(eq(jobs.eligibility, o.eligibility));
   if (o.min_score !== undefined) where.push(gte(scores.score, o.min_score));
-  if (o.since) where.push(gte(dsql`coalesce(${jobs.postedAt}, ${jobs.fetchedAt})`, new Date(o.since)));
+  if (o.since) where.push(gte(dsql`coalesce(${jobs.postedAt}, ${jobs.fetchedAt})`, dsql`${new Date(o.since).toISOString()}::timestamptz`));
   if (o.query) {
     const q = `%${o.query}%`;
     where.push(or(ilike(jobs.title, q), ilike(jobs.company, q), ilike(jobs.description, q))!);
@@ -128,7 +128,7 @@ export async function shortlist(limit?: number) {
     .leftJoin(applications, eq(applications.jobId, jobs.id))
     .where(and(
       eq(jobs.rejected, false), ne(jobs.eligibility, "ineligible"), isNull(applications.id),
-      gte(scores.score, p.shortlist.min_score), gte(dsql`coalesce(${jobs.postedAt}, ${jobs.fetchedAt})`, since),
+      gte(scores.score, p.shortlist.min_score), gte(dsql`coalesce(${jobs.postedAt}, ${jobs.fetchedAt})`, dsql`${since.toISOString()}::timestamptz`),
     ))
     .orderBy(desc(scores.score), desc(jobs.postedAt))
     .limit(n);
