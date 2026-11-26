@@ -24,6 +24,9 @@ export function parseSince(v: string | undefined, fallbackMs: number): Date {
 }
 
 const MATCHABLE = ["approved", "applied", "replied", "interviewing"] as const;
+const PER_RUN = 60;
+const GAP_MS = 150; // ~6 messages.get/s, well under Gmail's per-user rate
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Candidate { appId: number; status: string; company: string; domain: string | null }
 
@@ -47,7 +50,9 @@ export interface InboxItem {
 export async function syncAccount(acct: Account, opts: { since?: Date; dryRun?: boolean } = {}): Promise<{ matched: InboxItem[]; unmatched: InboxItem[] }> {
   const since = opts.since ?? acct.lastSyncAt ?? new Date(Date.now() - 14 * 86400_000);
   const q = `after:${Math.floor(since.getTime() / 1000) - 600} -in:sent -in:chats -category:promotions -category:social`;
-  const ids = await listMessageIds(acct, q, 150);
+  // Oldest first, at most PER_RUN per sync: progress is saved per message, so a big
+  // first sync (or a Gmail quota error) resumes where it stopped instead of starting over.
+  const ids = (await listMessageIds(acct, q, 500)).reverse().slice(0, PER_RUN);
 
   const cands: Candidate[] = (await db().select({ appId: applications.id, status: applications.status, company: jobs.company, domain: jobs.companyDomain })
     .from(applications).innerJoin(jobs, eq(jobs.id, applications.jobId))
@@ -56,8 +61,18 @@ export async function syncAccount(acct: Account, opts: { since?: Date; dryRun?: 
   const titles = new Map((await db().select({ id: applications.id, company: jobs.company, title: jobs.title }).from(applications).innerJoin(jobs, eq(jobs.id, applications.jobId))).map((r) => [r.id, r]));
 
   const matched: InboxItem[] = [], unmatched: InboxItem[] = [];
-  for (const { id } of ids.reverse()) {
-    const m = await getMessage(acct, id);
+  let checkpoint: Date | null = null;
+  let stoppedEarly: string | null = null;
+  for (const { id } of ids) {
+    let m;
+    try {
+      m = await getMessage(acct, id);
+    } catch (e) {
+      if (/→ (403|429)/.test((e as Error).message) && /quota|rate/i.test((e as Error).message)) { stoppedEarly = "Gmail quota; resuming next run"; break; }
+      throw e;
+    }
+    await sleep(GAP_MS);
+    checkpoint = m.date;
     if (m.isSent || m.fromEmail === acct.email) continue;
     const thread = known.get(m.threadId);
     let appId = thread?.applicationId ?? null;
@@ -115,7 +130,13 @@ export async function syncAccount(acct: Account, opts: { since?: Date; dryRun?: 
     }
     (appId ? matched : unmatched).push(item);
   }
-  if (!opts.dryRun) await db().update(accounts).set({ lastSyncAt: new Date() }).where(eq(accounts.id, acct.id));
+  if (!opts.dryRun) {
+    // Caught up → now; otherwise the newest message handled, so the next run continues from there.
+    const caughtUp = !stoppedEarly && ids.length < PER_RUN;
+    const next = caughtUp ? new Date() : checkpoint;
+    if (next) await db().update(accounts).set({ lastSyncAt: next }).where(eq(accounts.id, acct.id));
+  }
+  if (stoppedEarly) console.warn(`[inbox] ${acct.email}: ${stoppedEarly} (handled ${matched.length + unmatched.length})`);
   return { matched, unmatched };
 }
 

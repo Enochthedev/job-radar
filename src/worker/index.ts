@@ -49,6 +49,9 @@ worker.on("completed", (j, r) => console.log(`[worker] ${j.name} done`, JSON.str
 worker.on("failed", (j, e) => { console.error(`[worker] ${j?.name} failed: ${e.message}`); logEvent("system", "worker.failed", { job: j?.name, error: e.message.slice(0, 300) }).catch(() => {}); });
 
 await schedule();
+// Recurring schedules survive redeploys, so a rules or profile change wouldn't apply until the
+// next daily slot. Re-run the gates once at every start; jobId de-dupes concurrent starts.
+await queue.add("rescore", { kind: "rescore" } satisfies Job, { jobId: `startup-rescore-${Math.floor(Date.now() / 60_000)}`, removeOnComplete: 20, removeOnFail: 20 });
 console.log("radar-worker started");
 
 const stop = async () => { await worker.close(); await queue.close(); process.exit(0); };
