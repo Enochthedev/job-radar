@@ -2,10 +2,7 @@ import { and, desc, eq, gte, ilike, isNull, lte, ne, or, sql as dsql, type SQL }
 import { db, logEvent } from "../db/client.js";
 import { applications, drafts, jobs, scores, type Application } from "../db/schema.js";
 import { loadProfile } from "../profile.js";
-import { fetchAshby, fetchGreenhouse, fetchLever } from "../sources/ats.js";
-import { parseSalaryText } from "../sources/salary.js";
-import type { RawJob } from "../sources/types.js";
-import { companyDomainFrom, decodeEntities, getText, htmlToText } from "../text.js";
+import { parseJobUrl } from "./parse-url.js";
 import { ingest } from "./ingest.js";
 
 export type AppStatus = Application["status"];
@@ -56,45 +53,6 @@ export function draftView(d: typeof drafts.$inferSelect) {
     approved_at: d.approvedAt, approved_by: d.approvedBy, approval_valid: Boolean(d.approvedAt && d.approvedHash === d.contentHash),
     sent_at: d.sentAt, created_at: d.createdAt,
   };
-}
-
-/** Parse a job page: known ATS APIs first, then schema.org JobPosting JSON-LD, then <title>. */
-export async function parseJobUrl(url: string): Promise<RawJob> {
-  const u = new URL(url);
-  const gh = u.hostname.match(/greenhouse\.io$/) && url.match(/\/([^/]+)\/jobs\/(\d+)/);
-  if (gh) { const all = await fetchGreenhouse({ name: gh[1], ats: "greenhouse", board: gh[1] }); const f = all.find((j) => j.externalId.endsWith(`:${gh[2]}`)); if (f) return { ...f, onWatchlist: false }; }
-  const lv = u.hostname === "jobs.lever.co" && url.match(/lever\.co\/([^/]+)\/([0-9a-f-]{36})/);
-  if (lv) { const all = await fetchLever({ name: lv[1], ats: "lever", board: lv[1] }); const f = all.find((j) => j.externalId.endsWith(`:${lv[2]}`)); if (f) return { ...f, onWatchlist: false }; }
-  const ab = u.hostname === "jobs.ashbyhq.com" && url.match(/ashbyhq\.com\/([^/]+)\/([0-9a-f-]{36})/);
-  if (ab) { const all = await fetchAshby({ name: ab[1], ats: "ashby", board: ab[1] }); const f = all.find((j) => j.externalId.endsWith(`:${ab[2]}`)); if (f) return { ...f, onWatchlist: false }; }
-
-  const html = await getText(url);
-  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    try {
-      const data = JSON.parse(m[1]);
-      const list = Array.isArray(data) ? data : data["@graph"] ?? [data];
-      const jp = list.find((x: { "@type"?: string | string[] }) => [x["@type"]].flat().includes("JobPosting"));
-      if (!jp) continue;
-      const loc = [jp.applicantLocationRequirements, jp.jobLocation].flat().filter(Boolean)
-        .map((l: { name?: string; address?: { addressCountry?: string | { name?: string }; addressLocality?: string } }) =>
-          l.name ?? [l.address?.addressLocality, typeof l.address?.addressCountry === "string" ? l.address.addressCountry : l.address?.addressCountry?.name].filter(Boolean).join(", "))
-        .filter(Boolean).join("; ");
-      const sal = jp.baseSalary?.value;
-      return {
-        source: "manual", externalId: url, url, title: decodeEntities(jp.title ?? ""),
-        company: decodeEntities(jp.hiringOrganization?.name ?? u.hostname),
-        companyDomain: companyDomainFrom(jp.hiringOrganization?.sameAs ?? jp.hiringOrganization?.url) ?? companyDomainFrom(url),
-        locationRaw: [jp.jobLocationType === "TELECOMMUTE" ? "Remote" : null, loc].filter(Boolean).join(" · ") || null,
-        salaryMin: sal?.minValue ?? sal?.value ?? null, salaryMax: sal?.maxValue ?? null, currency: jp.baseSalary?.currency ?? null,
-        salaryPeriod: /HOUR/i.test(sal?.unitText ?? "") ? "hour" : /MONTH/i.test(sal?.unitText ?? "") ? "month" : sal ? "year" : null,
-        description: htmlToText(jp.description), postedAt: jp.datePosted ? new Date(jp.datePosted) : null,
-      };
-    } catch { /* not JSON we understand */ }
-  }
-  const title = decodeEntities(html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i)?.[1] ?? html.match(/<title>([^<]+)<\/title>/i)?.[1] ?? url).trim();
-  const site = html.match(/<meta[^>]+property="og:site_name"[^>]+content="([^"]+)"/i)?.[1];
-  const body = htmlToText(html.match(/<body[\s\S]*<\/body>/i)?.[0] ?? html).slice(0, 20000);
-  return { source: "manual", externalId: url, url, title, company: decodeEntities(site ?? u.hostname.replace(/^www\.|^jobs\.|^careers\./, "")), companyDomain: companyDomainFrom(url), description: body, ...parseSalaryText(body.match(/[$€£]\s?\d[\d,.]*k?\s?[-–]\s?[$€£]?\s?\d[\d,.]*k?/i)?.[0]) };
 }
 
 export async function addJob(url: string, actor: "claude" | "owner" = "claude") {

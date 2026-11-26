@@ -43,7 +43,7 @@ const worker = new Worker<Job>(QUEUE, async (job) => {
     case "sheet-sync": return (await primaryAccount()) ? syncSheet() : { skipped: "no primary inbox connected" };
     case "rescore": return rescoreAll();
   }
-}, { connection, concurrency: 1 });
+}, { connection, concurrency: 2 }); // 2: a long YC run must not block inbox/sheet sync
 
 worker.on("completed", (j, r) => console.log(`[worker] ${j.name} done`, JSON.stringify(r).slice(0, 300)));
 worker.on("failed", (j, e) => { console.error(`[worker] ${j?.name} failed: ${e.message}`); logEvent("system", "worker.failed", { job: j?.name, error: e.message.slice(0, 300) }).catch(() => {}); });

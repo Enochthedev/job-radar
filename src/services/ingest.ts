@@ -1,6 +1,6 @@
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { db, logEvent } from "../db/client.js";
-import { jobs, scores, type NewJob } from "../db/schema.js";
+import { applications, jobs, scores, type NewJob } from "../db/schema.js";
 import { classify } from "../filter/classify.js";
 import { scoreJob } from "../filter/score.js";
 import { llmEligibility } from "../llm.js";
@@ -92,6 +92,7 @@ export async function ingest(raw: RawJob[], sourceName: string): Promise<Refresh
 /** LLM pass on jobs the regex couldn't decide. Bounded per run to cap spend. */
 export async function resolveUnknowns(ids: number[]) {
   if (!ids.length) return;
+  if (ids.length > LLM_PER_RUN) { for (let i = 0; i < ids.length; i += LLM_PER_RUN) await resolveUnknowns(ids.slice(i, i + LLM_PER_RUN)); return; }
   const rows = await db().select().from(jobs)
     .where(and(inArray(jobs.id, ids), eq(jobs.eligibility, "unknown"), eq(jobs.rejected, false)))
     .limit(LLM_PER_RUN);
@@ -146,10 +147,38 @@ export async function refreshSources(source?: string): Promise<RefreshCounts[]> 
   return results;
 }
 
-// Used by the worker to keep unscored rows from piling up after a profile change.
+/**
+ * Re-runs the gates on stored jobs with the current rules (after a rules fix or a
+ * profile.yaml change). Jobs that become ineligible are rejected; shortlisted
+ * applications for them are skipped so Claude never drafts for a role that can't be taken.
+ */
+export async function reclassifyAll() {
+  const profile = loadProfile(undefined, true);
+  const rows = await db().select().from(jobs).where(eq(jobs.rejected, false));
+  let rejected = 0, toLlm: number[] = [], skipped = 0;
+  for (const j of rows) {
+    const c = classify({ source: j.source, externalId: j.externalId, url: j.url, company: j.company, title: j.title, locationRaw: j.locationRaw, description: j.description }, profile);
+    if (c.rejectReason) {
+      await db().update(jobs).set({ rejected: true, rejectReason: c.rejectReason, eligibility: c.eligibility, eligibilityReason: c.eligibilityReason, remoteScope: c.remoteScope, description: null }).where(eq(jobs.id, j.id));
+      rejected++;
+      const apps = await db().update(applications).set({ status: "skipped", note: `auto-skipped: ${c.rejectReason}`.slice(0, 300), updatedAt: new Date() })
+        .where(and(eq(applications.jobId, j.id), eq(applications.status, "shortlisted"))).returning({ id: applications.id });
+      for (const a of apps) { skipped++; await logEvent("system", "application.status", { application_id: a.id, to: "skipped", note: c.rejectReason }); }
+    } else if (c.eligibility !== j.eligibility && !(j.eligibilityReason ?? "").startsWith("llm:")) {
+      await db().update(jobs).set({ eligibility: c.eligibility, eligibilityReason: c.eligibilityReason, remoteScope: c.remoteScope }).where(eq(jobs.id, j.id));
+      if (c.eligibility === "unknown") toLlm.push(j.id);
+    }
+  }
+  await resolveUnknowns(toLlm);
+  await logEvent("system", "jobs.reclassified", { checked: rows.length, rejected, sent_to_llm: toLlm.length, shortlist_skipped: skipped });
+  return { checked: rows.length, rejected, sent_to_llm: toLlm.length, shortlist_skipped: skipped };
+}
+
+// Daily: re-run the gates with current rules, then rescore what's left.
 export async function rescoreAll() {
+  const reclassified = await reclassifyAll();
   const n = await scoreJobs();
   await logEvent("system", "scores.recomputed", { n });
-  return n;
+  return { reclassified, scored: n };
 }
 

@@ -20,13 +20,15 @@ Postgres 16 + Redis 7 stay on the private compose network. Nightly `pg_dump` lan
 
 ## Sources
 
-HN Who is hiring (Algolia), RemoteOK, Remotive, Himalayas, We Work Remotely (RSS), and a watchlist of company boards on Greenhouse / Lever / Ashby. Each adapter returns the same `RawJob` shape (`src/sources/types.ts`), so a new board is one file. Boards that need a login are out of scope by design.
+HN Who is hiring (Algolia), RemoteOK, Remotive, Himalayas, We Work Remotely (RSS), a watchlist of company boards on Greenhouse / Lever / Ashby (`profile.yaml` `watchlist`), and **YC companies** read from their public YC company pages (`yc_directory`: the company list is the yc-oss daily mirror of YC's directory, filtered by region and topic; requests are sequential and spaced out). Each adapter returns the same `RawJob` shape (`src/sources/types.ts`), so a new board is one file. Boards that need a login (Work at a Startup, Wellfound, LinkedIn) are out of scope by design.
+
+`add_job` takes any job URL: Greenhouse / Lever / Ashby and HN links go through their APIs; Getro boards (Techstars and many VC boards) and pages with schema.org `JobPosting` data are read directly; anything else (Notion, Google Forms, JS-only pages) is rendered with Jina Reader and read by the LLM. Board listings, application forms, closed roles and multi-role careers pages come back as a clear error with what to pass instead.
 
 ## Filtering
 
 Three hard gates, then a 0–100 score. All rules live in `profile.yaml`.
 
-1. **Eligibility:** structured board restrictions → reject phrases → restricted locations → keep phrases; anything unclear goes to an LLM pass (OpenRouter, Haiku-class, fixed JSON schema), else `unknown` and flagged.
+1. **Eligibility:** structured board restrictions → reject phrases → **the post's own residency / work-authorisation wording** (beats board tags like "Anywhere in the World") → restricted locations → keep phrases; anything unclear goes to an LLM pass (OpenRouter, Haiku-class, fixed JSON schema), else `unknown` and flagged.
 2. **Role:** title must match a target role.
 3. **Level:** no staff/principal/junior titles, no "8+ years".
 

@@ -15,6 +15,8 @@ export const ProfileSchema = z.object({
   eligibility: z.object({
     reject: z.array(z.string()),
     keep: z.array(z.string()),
+    // Keep words too loose to trust inside a description ("global company"); only used on the location field.
+    location_only_keep: z.array(z.string()).default(["global", "anywhere"]),
     restricted_locations: z.array(z.string()),
     us_states: z.array(z.string()),
   }),
@@ -37,6 +39,14 @@ export const ProfileSchema = z.object({
     board: z.string(),
     yc: z.boolean().optional(),
   })).default([]),
+  yc_directory: z.object({
+    enabled: z.boolean().default(true),
+    regions: z.array(z.string()).default(["Fully Remote", "Remote", "Africa"]),
+    industries: z.array(z.string()).default([]),
+    tags: z.array(z.string()).default([]),
+    min_team_size: z.number().default(3),
+    max_companies: z.number().default(200),
+  }).default({ enabled: true, regions: ["Fully Remote", "Remote", "Africa"], industries: [], tags: [], min_team_size: 3, max_companies: 200 }),
   follow_up_days: z.array(z.number()).default([4, 10]),
   max_follow_ups: z.number().default(2),
 });

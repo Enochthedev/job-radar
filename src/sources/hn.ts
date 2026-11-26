@@ -1,4 +1,5 @@
 import { getJson, htmlToText, companyDomainFrom } from "../text.js";
+import { findSalary } from "./salary.js";
 import type { RawJob, SourceAdapter } from "./types.js";
 
 interface HnItem { id: number; created_at_i?: number; text?: string | null; author?: string; children?: HnItem[] }
@@ -34,6 +35,8 @@ export function parseHnComment(c: HnItem): RawJob | null {
     title: role.slice(0, 200),
     locationRaw: location,
     description: text,
+    // Pay is usually in the header line ("$3,000–4,000/month"); fall back to the body.
+    ...(findSalary(header).salaryMin ? findSalary(header) : findSalary(text)),
     postedAt: c.created_at_i ? new Date(c.created_at_i * 1000) : null,
     isYc: /\(YC [WSF]\d{2}\)|\bYC [WSF]\d{2}\b/i.test(header),
   };

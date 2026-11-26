@@ -61,8 +61,8 @@ export function buildMcpServer(): McpServer {
 
   s.registerTool("refresh_sources", {
     title: "Refresh sources",
-    description: "Run source adapters now. Sources: hn, remoteok, remotive, himalayas, wwr, careers. Omit to run all.",
-    inputSchema: { source: z.enum(["hn", "remoteok", "remotive", "himalayas", "wwr", "careers"]).optional() },
+    description: "Run source adapters now. Sources: hn, remoteok, remotive, himalayas, wwr, careers (watchlist ATS boards), yc (YC company pages). Omit to run all.",
+    inputSchema: { source: z.enum(["hn", "remoteok", "remotive", "himalayas", "wwr", "careers", "yc"]).optional() },
   }, wrap(({ source }) => refreshSources(source)));
 
   s.registerTool("shortlist", {

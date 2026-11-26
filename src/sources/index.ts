@@ -6,9 +6,10 @@ import { remoteok } from "./remoteok.js";
 import { remotive } from "./remotive.js";
 import type { SourceAdapter } from "./types.js";
 import { wwr } from "./wwr.js";
+import { ycAdapter } from "./yc.js";
 
 export function adapters(): SourceAdapter[] {
-  return [hn, remoteok, remotive, himalayas, wwr, careersAdapter(loadProfile().watchlist)];
+  return [hn, remoteok, remotive, himalayas, wwr, careersAdapter(loadProfile().watchlist), ycAdapter()];
 }
 
 export function adapter(name: string): SourceAdapter | undefined {

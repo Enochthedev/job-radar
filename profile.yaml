@@ -41,6 +41,7 @@ eligibility:
     - "remote\\.com"
     - "oyster"
     - "visa sponsorship"
+  location_only_keep: ["global", "anywhere"]   # too loose to trust inside a description
   # A location string made only of these means a hard restriction.
   restricted_locations:
     - "united states"
@@ -64,7 +65,45 @@ eligibility:
     - "australia"
     - "new zealand"
     - "philippines"
-  us_states: [alabama, alaska, arizona, arkansas, california, colorado, connecticut, delaware, florida, georgia, hawaii, idaho, illinois, indiana, iowa, kansas, kentucky, louisiana, maine, maryland, massachusetts, michigan, minnesota, mississippi, missouri, montana, nebraska, nevada, "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", ohio, oklahoma, oregon, pennsylvania, "rhode island", "south carolina", "south dakota", tennessee, texas, utah, vermont, virginia, washington, "west virginia", wisconsin, wyoming, "san francisco", "nyc", "bay area", "seattle", "austin", "boston", "los angeles"]
+    - "u.s."
+    - "u.s"
+    - "united states of america"
+    - "amer"
+    - "apac"
+    - "asia"
+    - "europe"
+    - "eu"
+    - "european union"
+    - "latin america"
+    - "south america"
+    - "central america"
+    - "ireland"
+    - "italy"
+    - "sweden"
+    - "norway"
+    - "denmark"
+    - "finland"
+    - "switzerland"
+    - "austria"
+    - "belgium"
+    - "czech republic"
+    - "romania"
+    - "ukraine"
+    - "israel"
+    - "turkey"
+    - "pakistan"
+    - "bangladesh"
+    - "singapore"
+    - "japan"
+    - "china"
+    - "korea"
+    - "vietnam"
+    - "indonesia"
+    - "argentina"
+    - "colombia"
+    - "chile"
+    - "peru"
+  us_states: [alabama, alaska, arizona, arkansas, california, colorado, connecticut, delaware, florida, georgia, hawaii, idaho, illinois, indiana, iowa, kansas, kentucky, louisiana, maine, maryland, massachusetts, michigan, minnesota, mississippi, missouri, montana, nebraska, nevada, "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", ohio, oklahoma, oregon, pennsylvania, "rhode island", "south carolina", "south dakota", tennessee, texas, utah, vermont, virginia, washington, "west virginia", wisconsin, wyoming, "san francisco", "nyc", "bay area", "seattle", "austin", "boston", "los angeles", "chicago", "denver", "miami", "atlanta", "toronto", "vancouver", "london", "berlin", "paris", "amsterdam"]
 
 roles:   # title must match one of these (regex, case-insensitive)
   - "back[- ]?end"
@@ -113,6 +152,16 @@ score:
 
 shortlist: { size: 12, min_score: 60 }
 
+# YC companies, read from their public YC company pages. The company list is yc-oss's daily
+# mirror of YC's directory, filtered here. regions/industries/tags use YC's own labels.
+yc_directory:
+  enabled: true
+  regions: ["Fully Remote", "Remote", "Africa"]
+  industries: [B2B, Fintech]
+  tags: [AI, Generative AI, Developer Tools, SaaS, Fintech, Payments, API, Open Source, Infrastructure, Machine Learning, Analytics]
+  min_team_size: 3
+  max_companies: 200   # read one at a time, ~1.5s apart, once a day
+
 # Companies whose own job boards are read directly (Greenhouse / Lever / Ashby).
 # board = the slug in the board URL. yc: true marks YC companies for the stage signal.
 watchlist:
@@ -125,6 +174,63 @@ watchlist:
   - { name: Deel, ats: ashby, board: deel }
   - { name: GitLab, ats: greenhouse, board: gitlab }
   - { name: Sourcegraph, ats: greenhouse, board: sourcegraph91 }
+  # Added 2026-11-26: remote-first companies in dev tools, AI, payments and support tooling,
+  # each confirmed to have a live public board with engineering roles.
+  - { name: 1Password, ats: ashby, board: 1password }
+  - { name: Airbyte, ats: ashby, board: airbyte, yc: true }
+  - { name: Attio, ats: ashby, board: attio }
+  - { name: Buffer, ats: ashby, board: buffer }
+  - { name: Canonical, ats: greenhouse, board: canonical }
+  - { name: Chainguard, ats: greenhouse, board: chainguard }
+  - { name: ClickHouse, ats: ashby, board: clickhouse }
+  - { name: Close, ats: ashby, board: close }
+  - { name: Cockroach Labs, ats: greenhouse, board: cockroachlabs }
+  - { name: Coder, ats: ashby, board: coder }
+  - { name: Cohere, ats: ashby, board: cohere }
+  - { name: Convex, ats: ashby, board: convex-dev }
+  - { name: Datadog, ats: greenhouse, board: datadog }
+  - { name: DigitalOcean, ats: greenhouse, board: digitalocean98 }
+  - { name: Drata, ats: ashby, board: drata }
+  - { name: DuckDuckGo, ats: ashby, board: duck-duck-go }
+  - { name: Elastic, ats: greenhouse, board: elastic }
+  - { name: Fly.io, ats: lever, board: fly }
+  - { name: Gorgias, ats: ashby, board: gorgias }
+  - { name: Grafana Labs, ats: greenhouse, board: grafanalabs }
+  - { name: Intercom, ats: greenhouse, board: intercom }
+  - { name: Knock, ats: ashby, board: knock }
+  - { name: Kong, ats: ashby, board: kong }
+  - { name: LangChain, ats: ashby, board: langchain }
+  - { name: Miro, ats: ashby, board: miro }
+  - { name: Modal, ats: ashby, board: modal }
+  - { name: Moniepoint, ats: greenhouse, board: moniepoint }
+  - { name: Mozilla, ats: greenhouse, board: mozilla }
+  - { name: n8n, ats: ashby, board: n8n }
+  - { name: Paddle, ats: ashby, board: paddle }
+  - { name: PagerDuty, ats: greenhouse, board: pagerduty }
+  - { name: Plain, ats: ashby, board: plain }
+  - { name: PlanetScale, ats: greenhouse, board: planetscale }
+  - { name: Pylon, ats: ashby, board: pylon, yc: true }
+  - { name: Render, ats: ashby, board: render }
+  - { name: Replit, ats: ashby, board: replit, yc: true }
+  - { name: Semgrep, ats: ashby, board: semgrep }
+  - { name: Sentry, ats: ashby, board: sentry }
+  - { name: Snyk, ats: ashby, board: snyk }
+  - { name: Socket, ats: ashby, board: socket }
+  - { name: Speakeasy, ats: ashby, board: speakeasy }
+  - { name: Stripe, ats: greenhouse, board: stripe }
+  - { name: Tailscale, ats: greenhouse, board: tailscale }
+  - { name: Temporal, ats: ashby, board: temporal }
+  - { name: Tines, ats: greenhouse, board: tines }
+  - { name: Toptal, ats: lever, board: toptal }
+  - { name: Trigger.dev, ats: ashby, board: triggerdev, yc: true }
+  - { name: Turing, ats: greenhouse, board: turing }
+  - { name: Twenty, ats: ashby, board: twenty, yc: true }
+  - { name: Twilio, ats: greenhouse, board: twilio }
+  - { name: Vanta, ats: ashby, board: vanta }
+  - { name: Warp, ats: ashby, board: warp }
+  - { name: Wikimedia, ats: greenhouse, board: wikimedia }
+  - { name: WorkOS, ats: ashby, board: workos }
+  - { name: Zapier, ats: ashby, board: zapier, yc: true }
 
 follow_up_days: [4, 10]
 max_follow_ups: 2

@@ -27,6 +27,7 @@ const Env = z.object({
 
   GITHUB_TOKEN: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+  JINA_API_KEY: z.string().optional(), // optional: higher rate limits on r.jina.ai (used to render JS pages like Notion)
   LLM_MODEL: z.string().default("anthropic/claude-haiku-5.5"),
 
   SENDING_ENABLED: bool,
