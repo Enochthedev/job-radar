@@ -18,6 +18,36 @@ function yearly(n: number | null | undefined, period: RawJob["salaryPeriod"]): n
   return Math.round(period === "hour" ? n * 2000 : period === "month" ? n * 12 : n);
 }
 
+/** RawJob → stored row: runs the gates and normalises pay to yearly. */
+export function toRow(r: RawJob, profile: ReturnType<typeof loadProfile>, hash = jobHash(r.company, r.title)): NewJob {
+  const c = classify(r, profile);
+  return {
+    source: r.source,
+    externalId: r.externalId,
+    url: r.url,
+    company: r.company.slice(0, 200),
+    companyDomain: r.companyDomain ?? companyDomainFrom(r.url),
+    title: r.title.slice(0, 300),
+    locationRaw: r.locationRaw?.slice(0, 500) ?? null,
+    eligibility: c.eligibility,
+    eligibilityReason: c.eligibilityReason,
+    remoteScope: c.remoteScope,
+    // Stored as yearly amounts in the posting's currency.
+    salaryMin: yearly(r.salaryMin, r.salaryPeriod),
+    salaryMax: yearly(r.salaryMax, r.salaryPeriod),
+    currency: r.currency ?? null,
+    stack: c.stack,
+    level: c.level,
+    // Rejected jobs keep their row (for dedupe + stats) but not their text.
+    description: c.rejectReason ? null : (r.description ?? "").slice(0, 20000),
+    postedAt: r.postedAt && !Number.isNaN(r.postedAt.getTime()) ? r.postedAt : null,
+    hash,
+    rejected: Boolean(c.rejectReason),
+    rejectReason: c.rejectReason,
+    isYc: Boolean(r.isYc),
+  };
+}
+
 /** Normalise + gate + store one batch from one adapter. */
 export async function ingest(raw: RawJob[], sourceName: string): Promise<RefreshCounts> {
   const profile = loadProfile(undefined, true);
@@ -47,33 +77,9 @@ export async function ingest(raw: RawJob[], sourceName: string): Promise<Refresh
     const hash = jobHash(r.company, r.title);
     if (dupHashes.has(hash)) { counts.duplicates++; continue; }
     dupHashes.add(hash);
-    const c = classify(r, profile);
-    if (c.rejectReason) counts.rejected++;
-    rows.push({
-      source: r.source,
-      externalId: r.externalId,
-      url: r.url,
-      company: r.company.slice(0, 200),
-      companyDomain: r.companyDomain ?? companyDomainFrom(r.url),
-      title: r.title.slice(0, 300),
-      locationRaw: r.locationRaw?.slice(0, 500) ?? null,
-      eligibility: c.eligibility,
-      eligibilityReason: c.eligibilityReason,
-      remoteScope: c.remoteScope,
-      // Stored as yearly amounts in the posting's currency.
-      salaryMin: yearly(r.salaryMin, r.salaryPeriod),
-      salaryMax: yearly(r.salaryMax, r.salaryPeriod),
-      currency: r.currency ?? null,
-      stack: c.stack,
-      level: c.level,
-      // Rejected jobs keep their row (for dedupe + stats) but not their text.
-      description: c.rejectReason ? null : (r.description ?? "").slice(0, 20000),
-      postedAt: r.postedAt && !Number.isNaN(r.postedAt.getTime()) ? r.postedAt : null,
-      hash,
-      rejected: Boolean(c.rejectReason),
-      rejectReason: c.rejectReason,
-      isYc: Boolean(r.isYc),
-    });
+    const row = toRow(r, profile, hash);
+    if (row.rejected) counts.rejected++;
+    rows.push(row);
   }
 
   // Insert in chunks; onConflictDoNothing covers a concurrent run.

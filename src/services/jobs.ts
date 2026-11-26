@@ -3,7 +3,7 @@ import { db, logEvent } from "../db/client.js";
 import { applications, drafts, jobs, scores, type Application } from "../db/schema.js";
 import { loadProfile } from "../profile.js";
 import { parseJobUrl } from "./parse-url.js";
-import { ingest } from "./ingest.js";
+import { ingest, resolveUnknowns, scoreJobs, toRow } from "./ingest.js";
 
 export type AppStatus = Application["status"];
 const ACTIVE: AppStatus[] = ["approved", "applied", "replied", "interviewing"];
@@ -58,6 +58,16 @@ export function draftView(d: typeof drafts.$inferSelect) {
 export async function addJob(url: string, actor: "claude" | "owner" = "claude") {
   const raw = await parseJobUrl(url);
   raw.source = "manual"; raw.externalId = url;
+  // Re-adding a URL refreshes it with the current parser (same id, so applications/drafts stay attached).
+  const [existing] = await db().select({ id: jobs.id }).from(jobs).where(and(eq(jobs.source, "manual"), eq(jobs.externalId, url)));
+  if (existing) {
+    const { source: _s, externalId: _e, ...fields } = toRow(raw, loadProfile(undefined, true));
+    await db().update(jobs).set({ ...fields, fetchedAt: new Date() }).where(eq(jobs.id, existing.id));
+    await resolveUnknowns([existing.id]);
+    await scoreJobs([existing.id]);
+    await logEvent(actor, "job.refreshed", { url, job_id: existing.id });
+    return getJob(existing.id);
+  }
   const counts = await ingest([raw], "manual");
   const [row] = await db().select({ id: jobs.id }).from(jobs).where(and(eq(jobs.source, "manual"), eq(jobs.externalId, url)));
   await logEvent(actor, "job.added", { url, counts });
